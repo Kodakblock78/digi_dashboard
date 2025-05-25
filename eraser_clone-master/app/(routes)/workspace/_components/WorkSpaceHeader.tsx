@@ -30,6 +30,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+
+
 const WorkSpaceHeader = ({
   Tabs,
   setActiveTab,
@@ -47,21 +49,24 @@ const WorkSpaceHeader = ({
     <div className="border-b border-[#7c5c3e] h-12 flex items-center px-4 w-full bg-[#3e2c1c]">
       {/* file name portion */}
       <div className="flex space-x-2 items-center justify-start w-full">
-        <Link href="/dashboard" className="flex space-x-2 items-center">
-          <img
-            src="/logo.jpg"
-            alt="logo"
-            className="w-8 h-8"
-            style={{
-              filter: "sepia(1) hue-rotate(-20deg) saturate(2)",
-            }}
-          />
-          <div>
-            <h1 className="text-sm font-medium text-[#e6d3b3]">
-              {file ? file.fileName : "Untitled"}
-            </h1>
-          </div>
-        </Link>
+      <div
+  onClick={() => setActiveTab("Document")}
+  className="flex space-x-2 items-center cursor-pointer"
+>
+  <img
+    src="/logo.jpg"
+    alt="logo"
+    className="w-8 h-8"
+    style={{
+      filter: "sepia(1) hue-rotate(-20deg) saturate(2)",
+    }}
+  />
+  <div>
+    <h1 className="text-sm font-medium text-[#e6d3b3]">
+      {file ? file.fileName : "Untitled"}
+    </h1>
+  </div>
+</div>
         <div>
           <DropdownMenu>
             <DropdownMenuTrigger className="rounded-sm hover:bg-[#a67c52] outline-none hover:text-[#e6d3b3] cursor-pointer p-1">

@@ -1,8 +1,7 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Excalidraw, THEME } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
-import type { AppState } from "@excalidraw/excalidraw/types/types";
 import { toast } from "sonner";
 
 interface File {
@@ -22,71 +21,73 @@ const Canvas = ({ onSaveTrigger, fileId, fileData }: CanvasProps) => {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previousTrigger = useRef<boolean>(false);
 
+  // Mount and load from localStorage
   useEffect(() => {
     setMounted(true);
-    setIsLoading(false);
+    loadWhiteboard();
   }, []);
 
-  useEffect(() => {
-    const shouldSave = whiteBoard.length > 0;
-    if (shouldSave) {
-      saveWhiteboard();
-    }
-  }, [onSaveTrigger]);
-
-  useEffect(() => {
-    if (fileData?.whiteboard) {
-      try {
-        const parsedData = JSON.parse(fileData.whiteboard);
-        if (JSON.stringify(parsedData) !== JSON.stringify(whiteBoard)) {
-          setWhiteBoard(parsedData);
-        }
-      } catch (error) {
-        const errorMessage = 'Error loading canvas data';
-        console.error(errorMessage, error);
-        setError(errorMessage);
-        toast.error(errorMessage);
-      }
-    } else {
-      setWhiteBoard([]);
-    }
-  }, [fileData?.whiteboard]);
-
-  const saveWhiteboard = () => {
-    if (!fileId) return;
-
+  const loadWhiteboard = () => {
     try {
-      const files = JSON.parse(localStorage.getItem('files') || '[]');
+      const files = JSON.parse(localStorage.getItem("files") || "[]");
       const currentFile = files.find((f: File) => f._id === fileId);
-      
-      if (!currentFile) {
-        throw new Error("File not found");
+
+      if (currentFile?.whiteboard) {
+        const parsed = JSON.parse(currentFile.whiteboard);
+        setWhiteBoard(parsed);
+      } else {
+        setWhiteBoard([]);
       }
 
-      const updatedFiles = files.map((file: File) => 
-        file._id === fileId 
-          ? { ...file, whiteboard: JSON.stringify(whiteBoard) }
-          : file
-      );
-      
-      localStorage.setItem('files', JSON.stringify(updatedFiles));
-      toast.success("Canvas saved successfully");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Error saving canvas";
-      console.error('Error saving canvas:', error);
+      setIsLoading(false);
+    } catch (err) {
+      const errorMessage = "Failed to load canvas data.";
+      console.error(errorMessage, err);
       setError(errorMessage);
       toast.error(errorMessage);
     }
   };
+
+  const saveWhiteboard = () => {
+    try {
+      const files = JSON.parse(localStorage.getItem("files") || "[]");
+      const updatedFiles = files.map((file: File) =>
+        file._id === fileId
+          ? { ...file, whiteboard: JSON.stringify(whiteBoard) }
+          : file
+      );
+      localStorage.setItem("files", JSON.stringify(updatedFiles));
+      toast.success("Canvas saved successfully");
+    } catch (err) {
+      const errorMessage = "Failed to save canvas.";
+      console.error(errorMessage, err);
+      toast.error(errorMessage);
+      setError(errorMessage);
+    }
+  };
+
+  // Save when trigger changes
+  useEffect(() => {
+    if (onSaveTrigger && !previousTrigger.current) {
+      if (whiteBoard.length > 0) {
+        saveWhiteboard();
+      }
+    }
+    previousTrigger.current = onSaveTrigger;
+  }, [onSaveTrigger]);
 
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-red-500">
           {error}
-          <button 
-            onClick={() => setError(null)}
+          <button
+            onClick={() => {
+              setError(null);
+              loadWhiteboard();
+            }}
             className="ml-2 underline hover:text-red-400"
           >
             Retry
@@ -106,19 +107,17 @@ const Canvas = ({ onSaveTrigger, fileId, fileData }: CanvasProps) => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)]">
-      {/* Top toolbar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-[#7c5c3e] bg-[#4b2e19]">
         <div className="text-[#e6d3b3] text-xl font-bold">
           {fileData.fileName || "Untitled"}
         </div>
       </div>
 
-      {/* Canvas container with adjusted height */}
       <div className="flex-1 bg-[#6e4b2a]">
         <Excalidraw
           theme={THEME.DARK}
           initialData={{
-            elements: whiteBoard.length > 0 ? whiteBoard : [],
+            elements: whiteBoard,
             appState: {
               viewBackgroundColor: "#6e4b2a",
               theme: THEME.DARK,
