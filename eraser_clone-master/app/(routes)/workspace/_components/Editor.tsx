@@ -6,40 +6,63 @@ import Header from "@editorjs/header";
 import List from "@editorjs/list";
 // @ts-ignore
 import checkList from "@editorjs/checklist";
-import { Edu_QLD_Beginner } from "next/font/google";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { FILE } from "../../dashboard/_components/DashboardTable";
+
+interface File {
+  _id: string;
+  fileName: string;
+  content?: string;
+  document?: string;
+}
 
 const rawDocument = {
-  time: 1550476186479,
+  time: new Date().getTime(),
   blocks: [
     {
-      id: "oUq2g_tl8y",
+      id: "welcome-header",
       type: "header",
       data: {
-        text: "Untitled Document",
-        level: 2,
+        text: "Welcome to Your New Document",
+        level: 1,
       },
     },
+    {
+      id: "intro-text",
+      type: "paragraph",
+      data: {
+        text: "Start writing your document here. Use the toolbar above to format your text."
+      }
+    },
+    {
+      id: "features-list",
+      type: "list",
+      data: {
+        style: "unordered",
+        items: [
+          "Create headers for better organization",
+          "Add lists for structured content",
+          "Use checklists for tasks and todos",
+          "Save your work anytime with the Save button"
+        ]
+      }
+    }
   ],
   version: "2.8.1",
 };
+
+interface EditorProps {
+  onSaveTrigger: boolean;
+  fileId: string;
+  fileData: File;
+}
 
 const Editor = ({
   onSaveTrigger,
   fileId,
   fileData,
-}: {
-  onSaveTrigger: any;
-  fileId: any;
-  fileData: FILE;
-}) => {
+}: EditorProps) => {
   const ref = useRef<EditorJs>();
   const [document, setDocument] = useState(rawDocument);
-
-  const updateDocument = useMutation(api.files.updateDocument);
 
   useEffect(() => {
     fileData && initEditor();
@@ -51,36 +74,80 @@ const Editor = ({
   }, [onSaveTrigger]);
 
   const initEditor = () => {
-    const editor = new EditorJs({
-      holder: "editorjs",
-      placeholder: "Let`s write an awesome story!",
-      tools: {
-        header: {
-          // @ts-ignore
-          class: Header,
-          inlineToolbar: true,
-          shortcut: "CMD+SHIFT+H",
-          placeholder: "Enter a heading",
+    try {
+      let initialData = document;
+
+      if (fileData?.document) {
+        try {
+          initialData = JSON.parse(fileData.document);
+        } catch (e) {
+          console.error('Error parsing document data:', e);
+          toast.error('Error loading document data');
+        }
+      }
+
+      const editor = new EditorJs({
+        holder: "editorjs",
+        placeholder: "Let's write an awesome story!",
+        tools: {
+          header: {
+            // @ts-ignore
+            class: Header,
+            inlineToolbar: true,
+            shortcut: "CMD+SHIFT+H",
+            placeholder: "Enter a heading",
+          },
+          list: List,
+          checklist: checkList,
         },
-        list: List,
-        checklist: checkList,
-      },
-      data: fileData.document ? JSON.parse(fileData.document) : document,
-    });
-    editor.isReady.then(() => {
-      ref.current = editor;
-    });
+        data: initialData,
+        onChange: () => {
+          // Mark content as having unsaved changes
+          // You could add an indicator in the UI here
+        }
+      });
+
+      editor.isReady
+        .then(() => {
+          ref.current = editor;
+        })
+        .catch((error) => {
+          console.error('Editor initialization error:', error);
+          toast.error('Error initializing editor');
+        });
+    } catch (error) {
+      console.error('Error in initEditor:', error);
+      toast.error('Error setting up editor');
+    }
   };
 
   const onDocumentSave = async () => {
-    if (ref.current) {
-      const savedData = await ref.current.save();
-      const resp = await updateDocument({
-        _id: fileId,
-        document: JSON.stringify(savedData),
-      });
+    if (!ref.current || !fileId) return;
 
-      toast.success("Document Saved");
+    try {
+      const savedData = await ref.current.save();
+      
+      // Load current files to get the latest state
+      const files = JSON.parse(localStorage.getItem('files') || '[]');
+      const currentFile = files.find((f: File) => f._id === fileId);
+      
+      if (!currentFile) {
+        toast.error('File not found');
+        return;
+      }
+
+      // Update the document content
+      const updatedFiles = files.map((file: File) => 
+        file._id === fileId 
+          ? { ...file, document: JSON.stringify(savedData) }
+          : file
+      );
+      
+      localStorage.setItem('files', JSON.stringify(updatedFiles));
+      toast.success("Document saved successfully");
+    } catch (error) {
+      console.error('Error saving document:', error);
+      toast.error("Error saving document");
     }
   };
 

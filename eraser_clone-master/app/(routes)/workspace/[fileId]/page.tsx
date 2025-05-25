@@ -7,9 +7,15 @@ import {
 } from "@/components/ui/resizable";
 import WorkSpaceHeader from "../_components/WorkSpaceHeader";
 import dynamic from "next/dynamic";
-import { useConvex } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { FILE } from "../../dashboard/_components/DashboardTable";
+import { toast } from "sonner";
+
+interface File {
+  _id: string;
+  fileName: string;
+  content?: string;
+  document?: string;
+  whiteboard?: string;
+}
 
 const Editor = dynamic(() => import("../_components/Editor"), {
   ssr: false,
@@ -20,80 +26,116 @@ const Canvas = dynamic(() => import("../_components/Canvas"), {
 });
 
 const Workspace = ({ params }: any) => {
-  const convex = useConvex();
-
-  const [fileData, setfileData] = useState<FILE>();
-  const [files, setFiles] = useState<FILE[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [currentFileName, setCurrentFileName] = useState("");
   const [newFileName, setNewFileName] = useState("");
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [triggerSave, setTriggerSave] = useState(false);
 
+  // Load files from localStorage on component mount
   useEffect(() => {
-    params.fileId && getFileData();
-  }, []);
+    const savedFiles = localStorage.getItem('files');
+    if (savedFiles) {
+      const parsedFiles = JSON.parse(savedFiles);
+      setFiles(parsedFiles);
+    }
+  }, []); // Only run on mount
 
-  const getFileData = async () => {
-    const file = await convex.query(api.files.getFilebyId, {
-      _id: params.fileId,
-    });
-
-    setfileData(file);
-  };
+  // Handle file selection when params.fileId changes
+  useEffect(() => {
+    if (params.fileId && files.length > 0) {
+      const fileToSelect = files.find((f: File) => f._id === params.fileId);
+      if (fileToSelect) {
+        setSelectedFileId(params.fileId);
+        setCurrentFileName(fileToSelect.fileName);
+      }
+    }
+  }, [params.fileId, files]);
 
   const handleSelectFile = (fileId: string) => {
     setSelectedFileId(fileId);
-    setCurrentFileName(files.find((file) => file.id === fileId)?.name || "");
+    setCurrentFileName(files.find((file) => file._id === fileId)?.fileName || "");
   };
 
-  const handleSaveFile = async () => {
-    if (!selectedFileId) return;
+  const handleSaveFile = React.useCallback(() => {
+    if (!selectedFileId) {
+      toast.error('No file selected');
+      return;
+    }
+    
+    try {
+      // Load current files to get the latest content
+      const currentFiles = JSON.parse(localStorage.getItem('files') || '[]');
+      const currentFile = currentFiles.find((f: File) => f._id === selectedFileId);
+      
+      if (!currentFile) {
+        toast.error('File not found');
+        return;
+      }
 
-    await convex.mutation(api.files.updateFile, {
-      _id: selectedFileId,
-      name: currentFileName,
-      content: "", // Add content here if needed
-    });
+      // Keep existing content/whiteboard data and update the filename if changed
+      const updatedFiles = currentFiles.map((file: File) => 
+        file._id === selectedFileId 
+          ? { 
+              ...file,
+              fileName: currentFileName || file.fileName
+            }
+          : file
+      );
 
-    setTriggerSave(!triggerSave);
-  };
+      setFiles(updatedFiles);
+      localStorage.setItem('files', JSON.stringify(updatedFiles));
+      
+      // Trigger save on Editor and Canvas components
+      setTriggerSave(prev => !prev);
+      toast.success('File saved successfully');
+    } catch (error) {
+      console.error('Error saving file:', error);
+      toast.error('Error saving file');
+    }
+  }, [selectedFileId, currentFileName]);
 
-  const handleDeleteFile = async (fileId: string) => {
-    await convex.mutation(api.files.deleteFile, { _id: fileId });
-
-    setFiles(files.filter((file) => file.id !== fileId));
+  const handleDeleteFile = (fileId: string) => {
+    const updatedFiles = files.filter((file) => file._id !== fileId);
+    setFiles(updatedFiles);
+    localStorage.setItem('files', JSON.stringify(updatedFiles));
+    
     if (selectedFileId === fileId) {
       setSelectedFileId(null);
       setCurrentFileName("");
     }
   };
 
-  const handleRenameFile = async () => {
+  const handleRenameFile = () => {
     if (!selectedFileId) return;
 
     const newName = prompt("Enter new file name", currentFileName);
     if (!newName || newName.trim() === "") return;
 
-    await convex.mutation(api.files.updateFile, {
-      _id: selectedFileId,
-      name: newName,
-      content: "", // Add content here if needed
-    });
-
+    const updatedFiles = files.map(file => 
+      file._id === selectedFileId 
+        ? { ...file, fileName: newName }
+        : file
+    );
+    
+    setFiles(updatedFiles);
     setCurrentFileName(newName);
-    setTriggerSave(!triggerSave);
+    localStorage.setItem('files', JSON.stringify(updatedFiles));
   };
 
-  const handleCreateFile = async () => {
+  const handleCreateFile = () => {
     if (!newFileName.trim()) return;
 
-    const newFile = await convex.mutation(api.files.createFile, {
-      name: newFileName,
-      content: "", // Add default content here if needed
-    });
+    const newFile = {
+      _id: Date.now().toString(), // Simple unique ID generation
+      fileName: newFileName,
+      content: ""
+    };
 
-    setFiles([...files, newFile]);
+    const updatedFiles = [...files, newFile];
+    setFiles(updatedFiles);
+    localStorage.setItem('files', JSON.stringify(updatedFiles));
     setNewFileName("");
     setShowNewFileModal(false);
   };
@@ -103,14 +145,14 @@ const Workspace = ({ params }: any) => {
       name: "Document",
     },
     {
-      name: "AI",
+      name: "Classroom",
     },
     {
       name: "Canvas",
     },
   ];
 
-  const [activeTab, setActiveTab] = useState(Tabs[1].name);
+  const [activeTab, setActiveTab] = useState(Tabs[2].name); // Set Canvas as default
 
   return (
     <div className="overflow-hidden w-full bg-[#4b2e19]">
@@ -119,7 +161,7 @@ const Workspace = ({ params }: any) => {
         setActiveTab={setActiveTab}
         activeTab={activeTab}
         onSave={() => setTriggerSave(!triggerSave)}
-        file={fileData}
+        file={files.find((f) => f._id === selectedFileId)}
       />
       {activeTab === "Document" ? (
         <div
@@ -153,6 +195,16 @@ const Workspace = ({ params }: any) => {
                   >
                     <span className="truncate max-w-[120px]">{file.fileName}</span>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        className="text-xs text-[#e6d3b3] hover:text-blue-400"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectFile(file._id);
+                          setActiveTab("Canvas");
+                        }}
+                      >
+                        Open
+                      </button>
                       <button
                         className="text-xs text-[#e6d3b3] hover:text-red-400"
                         onClick={(e) => {
@@ -193,6 +245,13 @@ const Workspace = ({ params }: any) => {
                   >
                     Rename
                   </button>
+                  <button
+                    className="bg-[#5c432a] text-[#e6d3b3] rounded px-4 py-1 font-semibold hover:bg-[#a67c52] transition"
+                    onClick={() => setActiveTab("Canvas")}
+                    disabled={!selectedFileId}
+                  >
+                    Open in Canvas
+                  </button>
                 </div>
               </div>
               <div className="flex-1 overflow-auto bg-[#6e4b2a]">
@@ -200,9 +259,7 @@ const Workspace = ({ params }: any) => {
                   <Editor
                     onSaveTrigger={triggerSave}
                     fileId={selectedFileId}
-                    fileData={
-                      files.find((f) => f._id === selectedFileId) || fileData!
-                    }
+                    fileData={files.find((f) => f._id === selectedFileId)!}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-[#e6d3b3] text-lg">
@@ -255,19 +312,31 @@ const Workspace = ({ params }: any) => {
           direction="horizontal"
         >
           <ResizablePanel defaultSize={50} minSize={40} collapsible={false}>
-            <Editor
-              onSaveTrigger={triggerSave}
-              fileId={params.fileId}
-              fileData={fileData!}
-            />
+            {selectedFileId && files.find((f) => f._id === selectedFileId) ? (
+              <Editor
+                onSaveTrigger={triggerSave}
+                fileId={selectedFileId}
+                fileData={files.find((f) => f._id === selectedFileId)!}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-[#e6d3b3] text-lg">
+                Select or create a file to start editing.
+              </div>
+            )}
           </ResizablePanel>
           <ResizableHandle className="bg-[#7c5c3e]" />
           <ResizablePanel defaultSize={50} minSize={45}>
-            <Canvas
-              onSaveTrigger={triggerSave}
-              fileId={params.fileId}
-              fileData={fileData!}
-            />
+            {selectedFileId && files.find((f) => f._id === selectedFileId) ? (
+              <Canvas
+                onSaveTrigger={triggerSave}
+                fileId={selectedFileId}
+                fileData={files.find((f) => f._id === selectedFileId)!}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-[#e6d3b3] text-lg">
+                Select or create a file to start editing.
+              </div>
+            )}
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : activeTab === "Canvas" ? (
@@ -277,11 +346,17 @@ const Workspace = ({ params }: any) => {
             background: "#6e4b2a",
           }}
         >
-          <Canvas
-            onSaveTrigger={triggerSave}
-            fileId={params.fileId}
-            fileData={fileData!}
-          />
+          {selectedFileId && files.find((f) => f._id === selectedFileId) ? (
+            <Canvas
+              onSaveTrigger={triggerSave}
+              fileId={selectedFileId}
+              fileData={files.find((f) => f._id === selectedFileId)!}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-[#e6d3b3] text-lg">
+              Select or create a file to start editing.
+            </div>
+          )}
         </div>
       ) : null}
     </div>

@@ -8,17 +8,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import {
-  Archive,
   Github,
   Info,
-  LayoutDashboard,
-  Link2,
-  MoreHorizontal,
   Save,
+  MoreHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { toast } from "sonner";
+
+interface File {
+  _id: string;
+  fileName: string;
+  content?: string;
+  whiteboard?: string;
+}
 
 import {
   Popover,
@@ -32,7 +36,13 @@ const WorkSpaceHeader = ({
   activeTab,
   onSave,
   file,
-}: any) => {
+}: {
+  Tabs: Array<{ name: string }>;
+  setActiveTab: (tab: string) => void;
+  activeTab: string;
+  onSave: () => void;
+  file?: File;
+}) => {
   return (
     <div className="border-b border-[#7c5c3e] h-12 flex items-center px-4 w-full bg-[#3e2c1c]">
       {/* file name portion */}
@@ -59,14 +69,12 @@ const WorkSpaceHeader = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-[#5c432a] ml-8 text-[#e6d3b3] border-[#7c5c3e]">
               <DropdownMenuItem className="cursor-pointer text-xs focus:bg-[#a67c52] focus:text-[#e6d3b3]">
-                <Archive size={16} className="mr-2" />
-                Move to Archive
+                <Info size={16} className="mr-2" />
+                About
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer focus:bg-[#a67c52] focus:text-[#e6d3b3]">
-                <Link className="flex items-center text-xs" href="/dashboard">
-                  <LayoutDashboard size={16} className="mr-2" />
-                  Go To Dashboard
-                </Link>
+              <DropdownMenuItem className="cursor-pointer text-xs focus:bg-[#a67c52] focus:text-[#e6d3b3]">
+                <Github size={16} className="mr-2" />
+                View Source
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
