@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { ChatRoom } from './ChatRoom';
 import { Plus, Trash2, User2, ChevronRight, Shield, Users, Edit2, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from '@/components/ui/button';
 
 interface Room {
   id: string;
@@ -28,6 +30,7 @@ export function ClassroomChat() {
   const [userRole, setUserRole] = useState<'admin' | 'follower'>('follower');
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
   const [rooms, setRooms] = useState<Room[]>(() => {
     try {
       const savedRooms = localStorage.getItem('chatRooms');
@@ -58,18 +61,22 @@ export function ClassroomChat() {
   };
 
   const handleDeleteRoom = (roomId: string) => {
-    if (confirm('Are you sure you want to delete this room?')) {
-      const updatedRooms = rooms.filter(room => room.id !== roomId);
-      // Rename remaining rooms to maintain sequential numbering
-      const renamedRooms = updatedRooms.map((room, index) => ({
-        ...room,
-        name: `Chat Group ${index}`
-      }));
-      setRooms(renamedRooms);
-      if (selectedRoom?.id === roomId) {
-        setSelectedRoom(null);
-      }
+    setRoomToDelete(roomId);
+  };
+
+  const confirmDeleteRoom = (roomId: string) => {
+    const updatedRooms = rooms.filter(room => room.id !== roomId);
+    // Rename remaining rooms to maintain sequential numbering
+    const renamedRooms = updatedRooms.map((room, index) => ({
+      ...room,
+      name: `Chat Group ${index}`
+    }));
+    setRooms(renamedRooms);
+    if (selectedRoom?.id === roomId) {
+      setSelectedRoom(null);
     }
+    setRoomToDelete(null); // Close the dialog
+    toast.success('Chat room deleted');
   };
 
   const handleJoinRoom = (room: Room) => {
@@ -79,6 +86,17 @@ export function ClassroomChat() {
     setRooms(updatedRooms);
     setSelectedRoom(room);
     setShowNamePrompt(false);
+  };
+
+  const handleRenameRoom = (roomId: string) => {
+    if (!editingName.trim()) return;
+    const updatedRooms = rooms.map(room => 
+      room.id === roomId ? { ...room, name: editingName } : room
+    );
+    setRooms(updatedRooms);
+    setEditingRoomId(null);
+    setEditingName('');
+    toast.success('Room name updated');
   };
 
   if (showNamePrompt) {
@@ -161,7 +179,18 @@ export function ClassroomChat() {
 
               {/* Group Selection */}
               <div className="w-full mb-6">
-                <h3 className="text-[#e6d3b3] text-left mb-2 font-medium">Select a Group:</h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-[#e6d3b3] text-left font-medium">Select a Group:</h3>
+                  {view === 'admin' && (
+                    <Button
+                      onClick={handleCreateRoom}
+                      className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3] flex items-center gap-2 px-3 py-1 h-8"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Room
+                    </Button>
+                  )}
+                </div>
                 <div className="max-h-48 overflow-y-auto space-y-2 rounded-lg border border-[#7c5c3e] p-2">
                   {rooms.map((room) => (
                     <button
@@ -339,6 +368,35 @@ export function ClassroomChat() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={roomToDelete !== null} onOpenChange={() => setRoomToDelete(null)}>
+        <DialogContent className="bg-[#3e2c1c] border-[#7c5c3e]">
+          <DialogHeader>
+            <DialogTitle className="text-[#e6d3b3]">Delete Chat Room</DialogTitle>
+          </DialogHeader>
+          <div className="text-[#e6d3b3] py-4">
+            Are you sure you want to delete this chat room? This action cannot be undone.
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRoomToDelete(null)}
+              className="bg-[#5c432a] text-[#e6d3b3] hover:bg-[#6e4b2a] border-[#7c5c3e]"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              onClick={() => roomToDelete && confirmDeleteRoom(roomToDelete)}
+              className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3]"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

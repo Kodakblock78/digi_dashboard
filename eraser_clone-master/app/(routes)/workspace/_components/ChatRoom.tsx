@@ -45,7 +45,7 @@ export function ChatRoom({ roomId }: ChatRoomProps) {
 
     const connectWebSocket = () => {
       try {
-        ws = new WebSocket(`ws://localhost:3001`);
+        ws = new WebSocket(`ws://localhost:3000/api/socket`);
 
         ws.onopen = () => {
           console.log('Connected to WebSocket server');

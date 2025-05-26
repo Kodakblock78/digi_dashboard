@@ -25,6 +25,7 @@ app.prepare().then(() => {
   const io = new Server(server, {
     path: '/api/socket',
     addTrailingSlash: false,
+    transports: ['websocket'],
     cors: {
       origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
       methods: ["GET", "POST"],
