@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server/index.js",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_ENV=production node server/index.js",
     "lint": "next lint"
   },
   "dependencies": {
@@ -48,6 +48,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "concurrently": "^9.1.2",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
