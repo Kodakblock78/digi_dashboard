@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import ConvexClientProvider from "./ConvexClientProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { TeamsApolloProvider } from "./_components/TeamsApolloProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,8 +22,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={cn(inter.className, "bg-neutral-900 text-white")}>
         <ConvexClientProvider>
-          {children}
-          <Toaster />
+          <TeamsApolloProvider>
+            {children}
+            <Toaster />
+          </TeamsApolloProvider>
         </ConvexClientProvider>
       </body>
     </html>
