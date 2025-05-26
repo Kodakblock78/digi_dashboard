@@ -33,6 +33,8 @@ const Workspace = ({ params }: any) => {
   const [newFileName, setNewFileName] = useState("");
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [triggerSave, setTriggerSave] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sidebarView, setSidebarView] = useState<'admin' | 'student'>('student');
 
   // Load files from localStorage on component mount
   useEffect(() => {
@@ -367,7 +369,95 @@ const Workspace = ({ params }: any) => {
           }}
           className="flex"
         >
-          <TeamsClassroom />
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 border-4 border-t-[#e6d3b3] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                <p className="text-[#e6d3b3] text-sm">Loading classroom...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Sidebar with tabs */}
+              <div className="w-72 bg-[#3e2c1c] border-r border-[#7c5c3e] flex flex-col p-4">
+                {/* View switcher tabs */}
+                <div className="flex mb-4 border border-[#7c5c3e] rounded-lg">
+                  <button
+                    onClick={() => setSidebarView('student')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-l-lg ${
+                      sidebarView === 'student'
+                        ? 'bg-[#a67c52] text-[#3e2c1c]'
+                        : 'text-[#e6d3b3] hover:bg-[#5c432a]'
+                    }`}
+                  >
+                    Student
+                  </button>
+                  <button
+                    onClick={() => setSidebarView('admin')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-r-lg ${
+                      sidebarView === 'admin'
+                        ? 'bg-[#a67c52] text-[#3e2c1c]'
+                        : 'text-[#e6d3b3] hover:bg-[#5c432a]'
+                    }`}
+                  >
+                    Admin
+                  </button>
+                </div>
+
+                {/* Content based on selected view */}
+                <h2 className="text-lg font-semibold text-[#e6d3b3] mb-4">
+                  {sidebarView === 'admin' ? 'Manage Rooms' : 'Available Rooms'}
+                </h2>
+                <ul className="flex-1 overflow-y-auto space-y-2">
+                  {sidebarView === 'admin' ? (
+                    <>
+                      {Array.from({ length: 3 }, (_, idx) => (
+                        <li
+                          key={idx}
+                          className="p-2 rounded cursor-pointer bg-[#5c432a] hover:bg-[#a67c52] text-[#e6d3b3] flex justify-between items-center"
+                        >
+                          <span>Admin Room {idx + 1}</span>
+                          <div className="flex gap-2 text-xs">
+                            <button className="hover:text-blue-400">Edit</button>
+                            <button className="hover:text-red-400">Delete</button>
+                          </div>
+                        </li>
+                      ))}
+                      <button className="w-full mt-2 p-2 rounded bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3] transition text-sm font-medium">
+                        + Create Room
+                      </button>
+                    </>
+                  ) : (
+                    Array.from({ length: 5 }, (_, idx) => (
+                      <li
+                        key={idx}
+                        className="p-2 rounded cursor-pointer bg-[#5c432a] hover:bg-[#a67c52] text-[#e6d3b3] flex justify-between items-center"
+                      >
+                        <span>Room {idx + 1}</span>
+                        <span className="text-xs text-[#a67c52]">12 online</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+
+              {/* Main chat area */}
+              <div className="flex-1 flex flex-col">
+                <div className="flex items-center justify-between px-6 py-3 border-b border-[#7c5c3e] bg-[#4b2e19]">
+                  <h2 className="text-xl font-bold text-[#e6d3b3]">
+                    {sidebarView === 'admin' ? 'Classroom Management' : 'Welcome to the Classroom'}
+                  </h2>
+                </div>
+                <div className="flex-1 bg-[#6e4b2a] p-4 overflow-y-auto">
+                  <p className="text-[#e6d3b3]">
+                    {sidebarView === 'admin' 
+                      ? 'Select a room to manage or create a new one.'
+                      : 'Select a room to start chatting.'}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       ) : null}
     </div>

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import ConvexClientProvider from "./ConvexClientProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { TeamsApolloProvider } from "./_components/TeamsApolloProvider";
 
@@ -21,12 +20,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn(inter.className, "bg-neutral-900 text-white")}>
-        <ConvexClientProvider>
-          <TeamsApolloProvider>
-            {children}
-            <Toaster />
-          </TeamsApolloProvider>
-        </ConvexClientProvider>
+        <TeamsApolloProvider>
+          {children}
+          <Toaster />
+        </TeamsApolloProvider>
       </body>
     </html>
   );

@@ -5,46 +5,42 @@ import SidebarTopButton, { Team } from "./SidebarTopButton";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
 import SideNavBottomMenu from "./SideNavBottomMenu";
-import { useConvex, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
 import { FileListContext } from "../_context/FileListContext";
+
 const Sidebar = () => {
-  // const { user } = useKindeBrowserClient();
   const user = { email: "demo@inactive-auth.com" }; // Dummy user for inactive auth
-  const createFile = useMutation(api.files.createNewFile);
-
   const [activeTeam, setActiveTeam] = useState<Team | any>();
-  const [totalFiles, setTotalFiles] = useState<Number>();
-  const [totalArchivedFiles, setTotalArchivedFiles] = useState<Number>();
-
+  const [totalFiles, setTotalFiles] = useState<Number>(0);
+  const [totalArchivedFiles, setTotalArchivedFiles] = useState<Number>(0);
   const { fileList, setFileList } = useContext(FileListContext);
 
   const onFileCreate = (fileName: string) => {
     try {
-      console.log(
-        "payload" + JSON.stringify({ fileName, team: activeTeam.teamName })
-      );
-      createFile({
+      const newFile = {
+        _id: Date.now().toString(),
         fileName,
         teamId: activeTeam?._id,
-        createdBy: user?.email!,
-        archieved: false,
+        createdBy: user?.email,
+        archived: false,
         document: "",
         whiteboard: "",
-      }).then(
-        (res) => {
-          toast.success("File created successfully");
-          getFiles();
-          console.log(res);
-        },
-        (error) => {
-          toast.error("Error creating file");
-          console.log(error);
-        }
-      );
+      };
+
+      // Get existing files from localStorage
+      const existingFiles = JSON.parse(localStorage.getItem("files") || "[]");
+      const updatedFiles = [...existingFiles, newFile];
+
+      // Save to localStorage
+      localStorage.setItem("files", JSON.stringify(updatedFiles));
+
+      // Update state
+      setFileList(updatedFiles);
+      getFiles();
+      toast.success("File created successfully");
     } catch (error) {
-      console.log(error);
+      console.error(error);
+      toast.error("Error creating file");
     }
   };
 
@@ -53,23 +49,29 @@ const Sidebar = () => {
       getFiles();
     }
   }, [activeTeam]);
-  const convex = useConvex();
 
-  const getFiles = async () => {
-    const result = await convex.query(api.files.getFiles, {
-      teamId: activeTeam?._id,
-    });
-
-    setFileList(result);
-    setTotalFiles(result?.length);
-    setTotalArchivedFiles(result?.filter((file: any) => file.archieved).length);
+  const getFiles = () => {
+    try {
+      const files = JSON.parse(localStorage.getItem("files") || "[]");
+      const teamFiles = files.filter(
+        (file: any) => file.teamId === activeTeam?._id
+      );
+      setFileList(teamFiles);
+      setTotalFiles(teamFiles.length);
+      setTotalArchivedFiles(
+        teamFiles.filter((file: any) => file.archived).length
+      );
+    } catch (error) {
+      console.error("Error loading files:", error);
+      toast.error("Error loading files");
+    }
   };
 
   return (
     <div className="text-white h-screen hidden sm:fixed max-w-64 py-4 px-4 sm:flex border-r border-neutral-800 flex-col">
       <div className="flex-1">
         <SidebarTopButton
-          user={user} // Pass dummy user
+          user={user}
           setActiveTeamInfo={(activeTeam: Team) => setActiveTeam(activeTeam)}
         />
         <Button
