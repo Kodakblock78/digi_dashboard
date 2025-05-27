@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChatRoom } from './ChatRoom';
 import { Plus, Trash2, User2, ChevronRight, Shield, Users, Edit2, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +39,8 @@ export function ClassroomChat() {
       return createDefaultRooms();
     }
   });
+  const [messages, setMessages] = useState<any[]>([]);
+  const ws = useRef<WebSocket | null>(null);
 
   // Update userRole when view changes
   useEffect(() => {
@@ -48,6 +50,58 @@ export function ClassroomChat() {
   useEffect(() => {
     localStorage.setItem('chatRooms', JSON.stringify(rooms));
   }, [rooms]);
+
+  // WebSocket connection
+  useEffect(() => {
+    if (!selectedRoom || !userName) return;
+    ws.current = new WebSocket(
+      `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/socket?room=${selectedRoom.id}&username=${encodeURIComponent(userName)}`
+    );
+
+    ws.current.onopen = () => {
+      // Optionally notify join
+    };
+    ws.current.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        setMessages((prev) => [...prev, msg]);
+      } catch {}
+    };
+    ws.current.onerror = (err) => {
+      toast.error('WebSocket error');
+    };
+    ws.current.onclose = () => {
+      // Optionally notify disconnect
+    };
+    return () => {
+      ws.current?.close();
+    };
+  }, [selectedRoom, userName]);
+
+  // Send message
+  const sendMessage = (content: string) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(
+        JSON.stringify({
+          type: 'send-message',
+          room: selectedRoom?.id,
+          data: { sender: userName, content },
+        })
+      );
+      // Add message locally for instant feedback
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sender: userName,
+          content,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } else {
+      toast.error('WebSocket not connected');
+    }
+  };
 
   const handleCreateRoom = () => {
     const nextGroupNumber = rooms.length;
@@ -80,10 +134,6 @@ export function ClassroomChat() {
   };
 
   const handleJoinRoom = (room: Room) => {
-    setSelectedRoom(room);
-    setShowNamePrompt(false);
-
-    setRooms(updatedRooms);
     setSelectedRoom(room);
     setShowNamePrompt(false);
   };
@@ -235,6 +285,7 @@ export function ClassroomChat() {
     );
   }
 
+  // Chat UI for selected room
   return (
     <div className="flex h-full">
       {/* Sidebar with rooms */}
@@ -355,13 +406,61 @@ export function ClassroomChat() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col h-full">
         {selectedRoom ? (
-          <ChatRoom 
-            roomId={selectedRoom.id} 
-            userName={userName} 
-            userRole={userRole}
-          />
+          <>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((msg, idx) => (
+                <div
+                  key={msg.id || idx}
+                  className={`p-3 rounded-lg ${
+                    msg.sender === 'System'
+                      ? 'bg-[#5c432a] text-[#a67c52] italic text-center'
+                      : msg.sender === userName
+                      ? 'bg-[#a67c52] text-[#3e2c1c] ml-auto'
+                      : 'bg-[#5c432a] text-[#e6d3b3]'
+                  } max-w-[80%]`}
+                >
+                  {msg.sender !== 'System' && (
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium">{msg.sender}</span>
+                      <span className="text-xs opacity-50">
+                        {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                  )}
+                  <p className={msg.sender === 'System' ? 'text-sm' : ''}>{msg.content}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-[#7c5c3e]">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-[#5c432a] border-[#7c5c3e] text-[#e6d3b3] placeholder:text-[#a67c52] rounded-lg px-3 py-2"
+                  placeholder="Type your message..."
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      sendMessage((e.target as HTMLInputElement).value);
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>('input[type="text"]');
+                    if (input && input.value.trim()) {
+                      sendMessage(input.value);
+                      input.value = '';
+                    }
+                  }}
+                  className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3]"
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
+          </>
         ) : (
           <div className="flex items-center justify-center h-full text-[#e6d3b3]">
             Select a chat group to start messaging
