@@ -145,7 +145,7 @@ const WorkSpaceHeader = ({
               <div className="space-y-2">
                 <h1 className="text-sm font-semibold">Info</h1>
                 <p className="text-xs text-[#e6d3b3]">
-                  Ai feature is under development. Please check back later.
+                 The classroom feature is currently in beta testing mode -- cut me some slack if you find any bugs or issues. Your feedback is invaluable in making this feature better!
                 </p>
               </div>
             </div>

@@ -2,6 +2,9 @@
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@microsoft/teams-js": "^2.37.0",
-    "graphql": "^16.11.0"
+    "@prisma/client": "^6.8.2",
+    "graphql": "^16.11.0",
+    "mongoose": "^8.15.1",
+    "prisma": "^6.8.2"
   }
 }
