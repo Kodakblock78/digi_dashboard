@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { ChatRoom } from './ChatRoom';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, User2, ChevronRight, Shield, Users, Edit2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,7 +14,7 @@ interface Room {
 
 // Create default rooms with numbered groups
 const createDefaultRooms = () => {
-  return Array.from({ length: 5 }, (_, i) => ({
+  return Array.from({ length: 1 }, (_, i) => ({
     id: `room-${i}`,
     name: `Chat Group ${i}`,
     participantCount: 0
@@ -27,7 +26,6 @@ export function ClassroomChat() {
   const [userName, setUserName] = useState<string>('');
   const [showNamePrompt, setShowNamePrompt] = useState(true);
   const [view, setView] = useState<'student' | 'admin'>('student');
-  const [userRole, setUserRole] = useState<'admin' | 'follower'>('follower');
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
@@ -40,113 +38,133 @@ export function ClassroomChat() {
     }
   });
   const [messages, setMessages] = useState<any[]>([]);
-  const ws = useRef<WebSocket | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Update userRole when view changes
+  // Add admin password state
+  const [adminPw, setAdminPw] = useState('');
+  const [adminPwError, setAdminPwError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false); // Track if user is authenticated as admin
+  const [showAdminModal, setShowAdminModal] = useState(false); // Add a new state to control the admin modal visibility
+
+  // Add state for join modal
+  const [pendingRoom, setPendingRoom] = useState<Room | null>(null);
+
+  // Load chat history from localStorage
   useEffect(() => {
-    setUserRole(view === 'admin' ? 'admin' : 'follower');
-  }, [view]);
+    if (selectedRoom) {
+      const saved = localStorage.getItem(`chat-history-${selectedRoom.id}`);
+      setMessages(saved ? JSON.parse(saved) : []);
+    }
+  }, [selectedRoom]);
 
-  useEffect(() => {
-    localStorage.setItem('chatRooms', JSON.stringify(rooms));
-  }, [rooms]);
-
-  // WebSocket connection
+  // SSE connection for receiving messages
   useEffect(() => {
     if (!selectedRoom || !userName) return;
-    ws.current = new WebSocket(
-      `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/socket?room=${selectedRoom.id}&username=${encodeURIComponent(userName)}`
-    );
-
-    ws.current.onopen = () => {
-      // Optionally notify join
-    };
-    ws.current.onmessage = (event) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+    const url = `/api/socket?room=${selectedRoom.id}&username=${encodeURIComponent(userName)}`;
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+    es.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        setMessages((prev) => [...prev, msg]);
+        if (msg.type === 'user-joined' || msg.type === 'user-left') {
+          setMessages(prev => [...prev, { ...msg.data, sender: 'System', content: `${msg.data.username} ${msg.type === 'user-joined' ? 'joined' : 'left'} the room` }]);
+        } else if (msg.type === 'chat-message') {
+          setMessages(prev => [...prev, msg.data]);
+        }
       } catch {}
     };
-    ws.current.onerror = (err) => {
-      toast.error('WebSocket error');
-    };
-    ws.current.onclose = () => {
-      // Optionally notify disconnect
+    es.onerror = () => {
+      toast.error('Connection lost');
     };
     return () => {
-      ws.current?.close();
+      es.close();
     };
   }, [selectedRoom, userName]);
 
-  // Send message
-  const sendMessage = (content: string) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(
-        JSON.stringify({
-          type: 'send-message',
-          room: selectedRoom?.id,
-          data: { sender: userName, content },
-        })
-      );
-      // Add message locally for instant feedback
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          sender: userName,
-          content,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    } else {
-      toast.error('WebSocket not connected');
+  // Save chat history to localStorage
+  useEffect(() => {
+    if (selectedRoom) {
+      localStorage.setItem(`chat-history-${selectedRoom.id}` , JSON.stringify(messages));
     }
+  }, [messages, selectedRoom]);
+
+  // Send message via POST
+  const sendMessage = async (content: string) => {
+    if (!selectedRoom || !userName || !content.trim()) return;
+    await fetch('/api/socket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        room: selectedRoom.id,
+        type: 'chat-message',
+        data: { sender: userName, content },
+      })
+    });
   };
 
+  // Room creation (admin only)
   const handleCreateRoom = () => {
-    const nextGroupNumber = rooms.length;
-    const newRoom = {
-      id: `room-${Date.now()}`,
-      name: `Chat Group ${nextGroupNumber}`,
-      participantCount: 0,
-      participants: []
-    };
-    setRooms([...rooms, newRoom]);
-  };
-
-  const handleDeleteRoom = (roomId: string) => {
-    setRoomToDelete(roomId);
-  };
-
-  const confirmDeleteRoom = (roomId: string) => {
-    const updatedRooms = rooms.filter(room => room.id !== roomId);
-    // Rename remaining rooms to maintain sequential numbering
-    const renamedRooms = updatedRooms.map((room, index) => ({
-      ...room,
-      name: `Chat Group ${index}`
-    }));
-    setRooms(renamedRooms);
-    if (selectedRoom?.id === roomId) {
-      setSelectedRoom(null);
+    if (view === 'admin') {
+      const nextGroupNumber = rooms.length;
+      const newRoom = {
+        id: `room-${Date.now()}`,
+        name: `Chat Group ${nextGroupNumber}`,
+        participantCount: 0
+      };
+      setRooms([...rooms, newRoom]);
+      localStorage.setItem('chatRooms', JSON.stringify([...rooms, newRoom]));
+      toast.success('Group created!');
+    } else {
+      toast.error('Only admin can create groups');
     }
-    setRoomToDelete(null); // Close the dialog
-    toast.success('Chat room deleted');
   };
 
+  // Join room (no password, just set state)
   const handleJoinRoom = (room: Room) => {
     setSelectedRoom(room);
     setShowNamePrompt(false);
   };
 
+  // Delete room (admin only)
+  const confirmDeleteRoom = (roomId: string) => {
+    if (view === 'admin') {
+      const updatedRooms = rooms.filter(room => room.id !== roomId);
+      setRooms(updatedRooms);
+      localStorage.setItem('chatRooms', JSON.stringify(updatedRooms));
+      setSelectedRoom(updatedRooms[0] || null);
+      setRoomToDelete(null);
+      toast.success('Group deleted!');
+    } else {
+      toast.error('Only admin can delete groups');
+      setRoomToDelete(null);
+    }
+  };
+
+  // Rename room (admin only)
   const handleRenameRoom = (roomId: string) => {
-    if (!editingName.trim()) return;
-    const updatedRooms = rooms.map(room => 
-      room.id === roomId ? { ...room, name: editingName } : room
-    );
-    setRooms(updatedRooms);
-    setEditingRoomId(null);
-    setEditingName('');
-    toast.success('Room name updated');
+    if (view === 'admin' && editingName.trim()) {
+      const updatedRooms = rooms.map(room => room.id === roomId ? { ...room, name: editingName } : room);
+      setRooms(updatedRooms);
+      localStorage.setItem('chatRooms', JSON.stringify(updatedRooms));
+      setEditingRoomId(null);
+      setEditingName('');
+      toast.success('Group renamed!');
+    } else {
+      toast.error('Only admin can rename groups');
+    }
+  };
+
+  // When switching view, require password for admin
+  const handleViewSwitch = (targetView: 'student' | 'admin') => {
+    if (targetView === 'admin' && !isAdmin) {
+      setView('student'); // Prevent switching
+      setShowNamePrompt(true); // Show modal for admin login
+    } else {
+      setView(targetView);
+    }
   };
 
   if (showNamePrompt) {
@@ -196,7 +214,7 @@ export function ClassroomChat() {
                     onClick={() => setView('student')}
                     className={`flex-1 px-4 py-2 text-sm font-medium rounded-l-lg ${
                       view === 'student'
-                        ? 'bg-[#a67c52] text-[#3e2c1c]'
+                        ? 'bg-[#a67c52] text-[#3c2c1c]'
                         : 'text-[#e6d3b3] hover:bg-[#5c432a]'
                     }`}
                   >
@@ -206,7 +224,7 @@ export function ClassroomChat() {
                     onClick={() => setView('admin')}
                     className={`flex-1 px-4 py-2 text-sm font-medium rounded-r-lg ${
                       view === 'admin'
-                        ? 'bg-[#a67c52] text-[#3e2c1c]'
+                        ? 'bg-[#a67c52] text-[#3c2c1c]'
                         : 'text-[#e6d3b3] hover:bg-[#5c432a]'
                     }`}
                   >
@@ -214,6 +232,25 @@ export function ClassroomChat() {
                   </button>
                 </div>
               </div>
+
+              {/* Admin password input */}
+              {view === 'admin' && (
+                <div className="w-full mb-6">
+                  <input
+                    type="password"
+                    value={adminPw}
+                    onChange={e => {
+                      setAdminPw(e.target.value);
+                      setAdminPwError('');
+                    }}
+                    className="w-full p-3 rounded-lg bg-[#5c432a] text-[#e6d3b3] outline-none border-2 border-[#7c5c3e] focus:border-[#a67c52] transition-colors placeholder-[#7c5c3e]"
+                    placeholder="Enter admin password"
+                  />
+                  {adminPwError && (
+                    <div className="text-red-400 text-sm mt-1">{adminPwError}</div>
+                  )}
+                </div>
+              )}
 
               {/* Name Input */}
               <div className="w-full mb-6">
@@ -234,7 +271,7 @@ export function ClassroomChat() {
                   {view === 'admin' && (
                     <Button
                       onClick={handleCreateRoom}
-                      className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3] flex items-center gap-2 px-3 py-1 h-8"
+                      className="bg-[#a67c52] text-[#3c2c1c] hover:bg-[#e6d3b3] flex items-center gap-2 px-3 py-1 h-8"
                     >
                       <Plus className="w-4 h-4" />
                       Create Room
@@ -248,7 +285,7 @@ export function ClassroomChat() {
                       onClick={() => setSelectedRoom(room)}
                       className={`w-full p-3 rounded-lg flex items-center justify-between ${
                         selectedRoom?.id === room.id
-                          ? 'bg-[#a67c52] text-[#3e2c1c]'
+                          ? 'bg-[#a67c52] text-[#3c2c1c]'
                           : 'bg-[#5c432a] text-[#e6d3b3] hover:bg-[#6e4b2a]'
                       }`}
                     >
@@ -267,14 +304,22 @@ export function ClassroomChat() {
               {/* Join Button */}
               <button
                 onClick={() => {
+                  if (view === 'admin' && !isAdmin) {
+                    if (adminPw !== 'admin123') {
+                      setAdminPwError('Incorrect admin password');
+                      return;
+                    } else {
+                      setIsAdmin(true);
+                    }
+                  }
                   if (selectedRoom) {
                     handleJoinRoom(selectedRoom);
                   } else {
                     toast.error('Please select a group');
                   }
                 }}
-                disabled={!userName.trim() || !selectedRoom}
-                className="w-full px-4 py-3 bg-[#a67c52] text-[#3e2c1c] rounded-lg font-medium hover:bg-[#e6d3b3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={!userName.trim() || !selectedRoom || (view === 'admin' && !adminPw && !isAdmin)}
+                className="w-full px-4 py-3 bg-[#a67c52] text-[#3c2c1c] rounded-lg font-medium hover:bg-[#e6d3b3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Join {selectedRoom ? selectedRoom.name : 'Chat'} as {view === 'admin' ? 'Admin' : 'Student'}
               </button>
@@ -285,9 +330,14 @@ export function ClassroomChat() {
     );
   }
 
+  // Filter messages to only show those for the selected room
+  const displayedMessages = selectedRoom
+    ? messages.filter((msg) => !msg.roomId || msg.roomId === selectedRoom.id)
+    : [];
+
   // Chat UI for selected room
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full">
       {/* Sidebar with rooms */}
       <div className="w-72 bg-[#3e2c1c] border-r border-[#7c5c3e] flex flex-col p-4">
         {/* Room list */}
@@ -296,17 +346,21 @@ export function ClassroomChat() {
             onClick={() => setView('student')}
             className={`flex-1 px-4 py-2 text-sm font-medium rounded-l-lg ${
               view === 'student'
-                ? 'bg-[#a67c52] text-[#3e2c1c]'
+                ? 'bg-[#a67c52] text-[#3c2c1c]'
                 : 'text-[#e6d3b3] hover:bg-[#5c432a]'
             }`}
           >
             Student
           </button>
           <button
-            onClick={() => setView('admin')}
+            onClick={() => {
+              if (view !== 'admin') {
+                setShowAdminModal(true);
+              }
+            }}
             className={`flex-1 px-4 py-2 text-sm font-medium rounded-r-lg ${
               view === 'admin'
-                ? 'bg-[#a67c52] text-[#3e2c1c]'
+                ? 'bg-[#a67c52] text-[#3c2c1c]'
                 : 'text-[#e6d3b3] hover:bg-[#5c432a]'
             }`}
           >
@@ -334,10 +388,10 @@ export function ClassroomChat() {
                 key={room.id}
                 className={`p-3 rounded-lg cursor-pointer flex items-center justify-between ${
                   selectedRoom?.id === room.id
-                    ? 'bg-[#a67c52] text-[#3e2c1c]'
+                    ? 'bg-[#a67c52] text-[#3c2c1c]'
                     : 'bg-[#5c432a] text-[#e6d3b3] hover:bg-[#6e4b2a]'
                 }`}
-                onClick={() => setSelectedRoom(room)}
+                onClick={() => setPendingRoom(room)}
               >
                 <div>
                   {editingRoomId === room.id ? (
@@ -391,7 +445,7 @@ export function ClassroomChat() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteRoom(room.id);
+                        setRoomToDelete(room.id);
                       }}
                       className="p-1 rounded hover:bg-[#7c5c3e] transition-colors text-[#e6d3b3]"
                     >
@@ -405,19 +459,27 @@ export function ClassroomChat() {
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 flex flex-col h-full">
+      {/* Chat area - take full right width */}
+      <div className="flex-1 flex flex-col h-full w-full max-w-full relative">
+        {/* Room name top right */}
+        {selectedRoom && (
+          <div className="absolute top-0 right-0 px-0 py-0 z-20 w-full flex justify-end">
+            <span className="text-lg font-semibold text-[#e6d3b3] opacity-70 bg-[#3e2c1c]/80 px-8 py-3 rounded-bl-xl w-fit min-w-[220px] text-right">
+              {selectedRoom.name}
+            </span>
+          </div>
+        )}
         {selectedRoom ? (
           <>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((msg, idx) => (
+            <div className="flex-1 overflow-y-auto p-4 pb-28 space-y-4">
+              {displayedMessages.map((msg, idx) => (
                 <div
                   key={msg.id || idx}
                   className={`p-3 rounded-lg ${
                     msg.sender === 'System'
                       ? 'bg-[#5c432a] text-[#a67c52] italic text-center'
                       : msg.sender === userName
-                      ? 'bg-[#a67c52] text-[#3e2c1c] ml-auto'
+                      ? 'bg-[#a67c52] text-[#3c2c1c] ml-auto'
                       : 'bg-[#5c432a] text-[#e6d3b3]'
                   } max-w-[80%]`}
                 >
@@ -433,7 +495,7 @@ export function ClassroomChat() {
                 </div>
               ))}
             </div>
-            <div className="p-4 border-t border-[#7c5c3e]">
+            <div className="p-4 border-t border-[#7c5c3e] bg-[#3e2c1c] w-full fixed bottom-0 left-72 z-30 max-w-[calc(100vw-18rem)]">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -454,7 +516,7 @@ export function ClassroomChat() {
                       input.value = '';
                     }
                   }}
-                  className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3]"
+                  className="bg-[#a67c52] text-[#3c2c1c] hover:bg-[#e6d3b3]"
                 >
                   Send
                 </Button>
@@ -489,9 +551,115 @@ export function ClassroomChat() {
             <Button
               type="submit"
               onClick={() => roomToDelete && confirmDeleteRoom(roomToDelete)}
-              className="bg-[#a67c52] text-[#3e2c1c] hover:bg-[#e6d3b3]"
+              className="bg-[#a67c52] text-[#3c2c1c] hover:bg-[#e6d3b3]"
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Password Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-auto">
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="bg-[#3e2c1c] p-8 rounded-xl w-[480px] shadow-2xl border border-[#7c5c3e] relative">
+              <button
+                onClick={() => {
+                  setShowAdminModal(false);
+                  setAdminPw('');
+                  setAdminPwError('');
+                }}
+                className="absolute right-4 top-4 p-2 rounded-full hover:bg-[#5c432a] transition-all text-[#7c5c3e] hover:text-[#e6d3b3] transform hover:rotate-90"
+                aria-label="Close modal"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <div className="flex flex-col items-center text-center">
+                <div className="h-12 w-12 rounded-full bg-[#a67c52] flex items-center justify-center mb-4">
+                  <Shield className="h-6 w-6 text-[#3c2c1c]" />
+                </div>
+                <h2 className="text-2xl font-bold text-[#e6d3b3] mb-2">Admin Login</h2>
+                <p className="text-[#a67c52] mb-6">Enter the admin password to access admin features.</p>
+                <div className="w-full mb-6">
+                  <input
+                    type="password"
+                    value={adminPw}
+                    onChange={e => {
+                      setAdminPw(e.target.value);
+                      setAdminPwError('');
+                    }}
+                    className="w-full p-3 rounded-lg bg-[#5c432a] text-[#e6d3b3] outline-none border-2 border-[#7c5c3e] focus:border-[#a67c52] transition-colors placeholder-[#7c5c3e]"
+                    placeholder="Enter admin password"
+                    autoFocus
+                  />
+                  {adminPwError && (
+                    <div className="text-red-400 text-sm mt-1">{adminPwError}</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (adminPw === 'admin123') {
+                      setView('admin');
+                      setShowAdminModal(false);
+                      setAdminPw('');
+                      setAdminPwError('');
+                    } else {
+                      setAdminPwError('Incorrect admin password');
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-[#a67c52] text-[#3c2c1c] rounded-lg font-medium hover:bg-[#e6d3b3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Login as Admin
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join Room Confirmation Modal */}
+      <Dialog open={pendingRoom !== null} onOpenChange={() => setPendingRoom(null)}>
+        <DialogContent className="bg-[#3e2c1c] border-[#7c5c3e]">
+          <DialogHeader>
+            <DialogTitle className="text-[#e6d3b3]">Join Chat Group</DialogTitle>
+          </DialogHeader>
+          <div className="text-[#e6d3b3] py-4">
+            Join <span className="font-bold">{pendingRoom?.name}</span> as {view === 'admin' ? 'Admin' : 'Student'}?
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingRoom(null)}
+              className="bg-[#5c432a] text-[#e6d3b3] hover:bg-[#6e4b2a] border-[#7c5c3e]"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              onClick={() => {
+                if (pendingRoom) {
+                  setSelectedRoom(pendingRoom);
+                  setPendingRoom(null);
+                }
+              }}
+              className="bg-[#a67c52] text-[#3c2c1c] hover:bg-[#e6d3b3]"
+            >
+              Join
             </Button>
           </DialogFooter>
         </DialogContent>

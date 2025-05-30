@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { TeamsApolloProvider } from "./_components/TeamsApolloProvider";
+import { ErrorBoundary } from "./_components/ErrorBoundary";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,7 +22,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={cn(inter.className, "bg-neutral-900 text-white")}>
         <TeamsApolloProvider>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
           <Toaster />
         </TeamsApolloProvider>
       </body>
