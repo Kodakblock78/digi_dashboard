@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "@excalidraw/excalidraw/index.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { TeamsApolloProvider } from "./_components/TeamsApolloProvider";
@@ -20,11 +21,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head />
       <body className={cn(inter.className, "bg-neutral-900 text-white")}>
         <TeamsApolloProvider>
-          <ErrorBoundary>
-            {children}
-          </ErrorBoundary>
+          <ErrorBoundary>{children}</ErrorBoundary>
           <Toaster />
         </TeamsApolloProvider>
       </body>

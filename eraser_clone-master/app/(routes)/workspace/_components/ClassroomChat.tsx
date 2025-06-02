@@ -5,6 +5,7 @@ import { Plus, Trash2, User2, ChevronRight, Shield, Users, Edit2, Check } from '
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Room {
   id: string;
@@ -334,141 +335,107 @@ export function ClassroomChat() {
   const displayedMessages = selectedRoom
     ? messages.filter((msg) => !msg.roomId || msg.roomId === selectedRoom.id)
     : [];
-
   // Chat UI for selected room
   return (
     <div className="flex h-full w-full">
-      {/* Sidebar with rooms */}
-      <div className="w-72 bg-[#3e2c1c] border-r border-[#7c5c3e] flex flex-col p-4">
-        {/* Room list */}
-        <div className="flex-1 overflow-y-auto">
-          <button
-            onClick={() => setView('student')}
-            className={`flex-1 px-4 py-2 text-sm font-medium rounded-l-lg ${
-              view === 'student'
-                ? 'bg-[#a67c52] text-[#3c2c1c]'
-                : 'text-[#e6d3b3] hover:bg-[#5c432a]'
-            }`}
-          >
-            Student
-          </button>
-          <button
-            onClick={() => {
-              if (view !== 'admin') {
-                setShowAdminModal(true);
-              }
-            }}
-            className={`flex-1 px-4 py-2 text-sm font-medium rounded-r-lg ${
-              view === 'admin'
-                ? 'bg-[#a67c52] text-[#3c2c1c]'
-                : 'text-[#e6d3b3] hover:bg-[#5c432a]'
-            }`}
-          >
-            Admin
-          </button>
-        </div>
-
-        {/* Room list */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[#e6d3b3]">Chat Groups</h2>
-            {view === 'admin' && (
-              <button
-                onClick={handleCreateRoom}
-                className="p-1 rounded hover:bg-[#5c432a]"
-                title="Add new chat group"
+      <div className="flex-1 flex flex-col h-full w-full max-w-full relative">
+        <div className="p-4 border-b border-[#7c5c3e] bg-[#3e2c1c]/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-bold text-[#e6d3b3]">Chat</h1>
+              <Select
+                value={selectedRoom?.id}
+                onValueChange={(value) => {
+                  const room = rooms.find(r => r.id === value);
+                  if (room) setPendingRoom(room);
+                }}
               >
-                <Plus className="w-5 h-5 text-[#e6d3b3]" />
-              </button>
-            )}
-          </div>
-          <div className="space-y-2">
-            {rooms.map((room) => (
-              <div
-                key={room.id}
-                className={`p-3 rounded-lg cursor-pointer flex items-center justify-between ${
-                  selectedRoom?.id === room.id
-                    ? 'bg-[#a67c52] text-[#3c2c1c]'
-                    : 'bg-[#5c432a] text-[#e6d3b3] hover:bg-[#6e4b2a]'
-                }`}
-                onClick={() => setPendingRoom(room)}
-              >
-                <div>
-                  {editingRoomId === room.id ? (
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleRenameRoom(room.id);
-                        } else if (e.key === 'Escape') {
-                          setEditingRoomId(null);
-                        }
-                      }}
-                      className="bg-[#2a1810] text-[#e6d3b3] border border-[#7c5c3e] rounded px-2 py-1 text-sm font-medium focus:outline-none focus:border-[#a67c52]"
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <div className="font-medium">{room.name}</div>
-                  )}
-                  <div className="text-sm opacity-75">
-                    <User2 size={16} className="inline mr-1" /> Chat Room
-                  </div>
-                </div>
-                {view === 'admin' && (
-                  <div className="flex gap-2">
-                    {editingRoomId === room.id ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRenameRoom(room.id);
+                <SelectTrigger className="w-[200px] bg-[#5c432a] border-[#7c5c3e] text-[#e6d3b3]">
+                  <SelectValue placeholder="Select a chat group" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#3e2c1c] border-[#7c5c3e]">
+                  {rooms.map((room) => (
+                    <SelectItem
+                      key={room.id}
+                      value={room.id}
+                      className="text-[#e6d3b3] focus:bg-[#a67c52] focus:text-[#3c2c1c]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <User2 size={16} />
+                        {room.name} ({room.participantCount} {room.participantCount === 1 ? 'member' : 'members'})
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {view === 'admin' && (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleCreateRoom}
+                    size="sm"
+                    className="bg-[#a67c52] text-[#3c2c1c] hover:bg-[#e6d3b3] flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Group
+                  </Button>
+                  {selectedRoom && (
+                    <>
+                      <Button
+                        onClick={() => {
+                          setEditingRoomId(selectedRoom.id);
+                          setEditingName(selectedRoom.name);
                         }}
-                        className="p-1 rounded hover:bg-[#7c5c3e] transition-colors text-[#e6d3b3]"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingRoomId(room.id);
-                          setEditingName(room.name);
-                        }}
-                        className="p-1 rounded hover:bg-[#7c5c3e] transition-colors text-[#e6d3b3]"
+                        variant="outline"
+                        size="icon"
+                        className="bg-[#5c432a] border-[#7c5c3e] text-[#e6d3b3] hover:bg-[#6e4b2a]"
                       >
                         <Edit2 className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRoomToDelete(room.id);
-                      }}
-                      className="p-1 rounded hover:bg-[#7c5c3e] transition-colors text-[#e6d3b3]"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                      </Button>
+                      <Button
+                        onClick={() => setRoomToDelete(selectedRoom.id)}
+                        variant="outline"
+                        size="icon"
+                        className="bg-[#5c432a] border-[#7c5c3e] text-[#e6d3b3] hover:bg-[#6e4b2a]"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="flex bg-[#5c432a] rounded-lg p-1">
+                <button
+                  onClick={() => setView('student')}
+                  className={`px-2 py-1 text-xs font-medium rounded ${
+                    view === 'student'
+                      ? 'bg-[#a67c52] text-[#3c2c1c]'
+                      : 'text-[#e6d3b3] hover:bg-[#6e4b2a]'
+                  }`}
+                >
+                  S
+                </button>
+                <button
+                  onClick={() => {
+                    if (view !== 'admin') {
+                      setShowAdminModal(true);
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs font-medium rounded ${
+                    view === 'admin'
+                      ? 'bg-[#a67c52] text-[#3c2c1c]'
+                      : 'text-[#e6d3b3] hover:bg-[#6e4b2a]'
+                  }`}
+                >
+                  A
+                </button>
               </div>
-            ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Chat area - take full right width */}
-      <div className="flex-1 flex flex-col h-full w-full max-w-full relative">
-        {/* Room name top right */}
-        {selectedRoom && (
-          <div className="absolute top-0 right-0 px-0 py-0 z-20 w-full flex justify-end">
-            <span className="text-lg font-semibold text-[#e6d3b3] opacity-70 bg-[#3e2c1c]/80 px-8 py-3 rounded-bl-xl w-fit min-w-[220px] text-right">
-              {selectedRoom.name}
-            </span>
-          </div>
-        )}
         {selectedRoom ? (
           <>
             <div className="flex-1 overflow-y-auto p-4 pb-28 space-y-4">
@@ -494,8 +461,7 @@ export function ClassroomChat() {
                   <p className={msg.sender === 'System' ? 'text-sm' : ''}>{msg.content}</p>
                 </div>
               ))}
-            </div>
-            <div className="p-4 border-t border-[#7c5c3e] bg-[#3e2c1c] w-full fixed bottom-0 left-72 z-30 max-w-[calc(100vw-18rem)]">
+            </div>            <div className="p-4 border-t border-[#7c5c3e] bg-[#3e2c1c] w-full absolute bottom-0 z-30">
               <div className="flex gap-2">
                 <input
                   type="text"
