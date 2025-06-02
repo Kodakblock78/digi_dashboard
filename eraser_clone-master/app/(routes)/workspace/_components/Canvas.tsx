@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Excalidraw, THEME } from "@excalidraw/excalidraw";
+import "@excalidraw/excalidraw/dist/excalidraw.index.css";
 import { toast } from "sonner";
 import styles from "../_styles/canvasStyles.module.css";
 import { MessageCircle, X } from "lucide-react";
