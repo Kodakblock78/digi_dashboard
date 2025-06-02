@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { useRouter } from "next/navigation";
 
 export interface FILE {
@@ -33,10 +32,8 @@ export interface FILE {
   whiteboard: string;
 }
 
-const DashboardTable = () => {
-  const { fileList, setFileList } = useContext(FileListContext);
+const DashboardTable = () => {  const { fileList, setFileList } = useContext(FileListContext);
   const [fileList_, setFileList_] = useState([] as FILE[]);
-  const { user } = useKindeBrowserClient();
   useEffect(() => {
     fileList && setFileList_(fileList);
     console.log(fileList);
@@ -78,13 +75,9 @@ const DashboardTable = () => {
                 </TableCell>
                 <TableCell className=""></TableCell>
                 <TableCell className="w-[150px] text-sm">
-                  <div>
-                    <img
-                      src={
-                        user?.picture ??
-                        "https://img.freepik.com/free-vector/graphic-designer-man_78370-159.jpg?size=626&ext=jpg&ga=GA1.1.1395880969.1709251200&semt=ais"
-                      }
-                      alt="logo"
+                  <div>                    <img
+                      src="https://img.freepik.com/free-vector/graphic-designer-man_78370-159.jpg?size=626&ext=jpg&ga=GA1.1.1395880969.1709251200&semt=ais"
+                      alt="user avatar"
                       className="w-8 h-8 rounded-full object-cover cursor-pointer"
                     />
                   </div>
