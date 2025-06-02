@@ -9,7 +9,6 @@ import {
 import WorkSpaceHeader from "../_components/WorkSpaceHeader";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { ChatRoom } from "../_components/ChatRoom";
 import { RenameDialog } from "../_components/RenameDialog";
 import { ClassroomChat } from "../_components/ClassroomChat";
 
